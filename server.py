@@ -58,4 +58,5 @@ app.add_routes([web.get('/', index),
                 web.post('/offer', offer)])
 
 if __name__ == '__main__':
-    web.run_app(app, port=8080)
+    web.run_app(app, host='0.0.0.0', port=8080)  # Escutar em todas as interfaces de rede
+
