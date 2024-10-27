@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Aplicação WebRTC</title>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>Aplicação WebRTC</h1>
+    <video id="localVideo" autoplay playsinline></video>
+    <video id="remoteVideo" autoplay playsinline></video>
+
+    <script>
+        const localVideo = document.getElementById('localVideo');
+        
+        // Captura da mídia local (webcam e microfone)
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then((stream) => {
+                // Defina o stream da webcam no elemento de vídeo
+                localVideo.srcObject = stream;
+            })
+            .catch((error) => {
+                console.error('Erro ao acessar a webcam:', error);
+            });
+    </script>
+</body>
+</html>
