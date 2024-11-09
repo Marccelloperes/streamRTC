@@ -98,12 +98,14 @@
                 };
 
                 // Cria e envia a oferta SDP
-                const offer = await peerConnection.createOffer();
-                await peerConnection.setLocalDescription(offer);
-                socket.emit('signal', { 'sdp': peerConnection.localDescription });
+                peerConnection.createOffer()
+                    .then(offer => peerConnection.setLocalDescription(offer))
+                    .then(() => {
+                        socket.emit('signal', { 'sdp': peerConnection.localDescription });
+                    });
 
             } catch (error) {
-                console.error('Erro ao acessar a webcam ou criar a oferta SDP:', error);
+                console.error('Erro ao acessar a webcam:', error);
             }
         }
 
@@ -129,7 +131,7 @@
             } else if (data.ice) {
                 peerConnection.addIceCandidate(new RTCIceCandidate(data.ice));
             }
-        }); // Corrigido: fechando corretamente o bloco 'socket.on'
+        }); // Fechamento correto do bloco 'socket.on'
 
         // Listar as câmeras ao carregar a página
         window.onload = async () => {
