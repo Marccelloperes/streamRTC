@@ -6,66 +6,73 @@
 </head>
 <body>
     <h1>Aplicação WebRTC</h1>
-    <video id="localVideo" autoplay></video>
-    <video id="remoteVideo" autoplay></video>
+    <video id="localVideo" autoplay playsinline></video>
+    <video id="remoteVideo" autoplay playsinline></video>
 
     <script>
-        const socket = io.connect('http://' + document.domain + ':' + location.port);
-        
-        let localStream;
-        let peerConnection;
-        const config = {
-            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-        };
+        // Verifica suporte ao getUserMedia
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            const socket = io.connect(window.location.protocol + '//' + window.location.hostname + ':' + location.port);
 
-        // Captura da mídia local
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-            .then(stream => {
-                localStream = stream;
-                document.getElementById('localVideo').srcObject = stream;
+            let localStream;
+            let peerConnection;
+            const config = {
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            };
 
-                // Inicializa a PeerConnection
-                peerConnection = new RTCPeerConnection(config);
-                localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+            // Captura da mídia local
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                .then(stream => {
+                    localStream = stream;
+                    document.getElementById('localVideo').srcObject = stream;
 
-                // Envia candidatos ICE para o servidor de sinalização
-                peerConnection.onicecandidate = event => {
-                    if (event.candidate) {
-                        socket.emit('signal', { 'ice': event.candidate });
-                    }
-                };
+                    // Inicializa a PeerConnection
+                    peerConnection = new RTCPeerConnection(config);
+                    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
-                // Recebe streams remotos
-                peerConnection.ontrack = event => {
-                    document.getElementById('remoteVideo').srcObject = event.streams[0];
-                };
-
-                // Cria a oferta SDP
-                peerConnection.createOffer()
-                    .then(offer => peerConnection.setLocalDescription(offer))
-                    .then(() => {
-                        socket.emit('signal', { 'sdp': peerConnection.localDescription });
-                    });
-            })
-            .catch(error => console.error('Erro ao acessar mídia:', error));
-
-        // Recebe sinais do servidor de sinalização
-        socket.on('signal', data => {
-            if (data.sdp) {
-                peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp))
-                    .then(() => {
-                        if (data.sdp.type === 'offer') {
-                            peerConnection.createAnswer()
-                                .then(answer => peerConnection.setLocalDescription(answer))
-                                .then(() => {
-                                    socket.emit('signal', { 'sdp': peerConnection.localDescription });
-                                });
+                    // Envia candidatos ICE para o servidor de sinalização
+                    peerConnection.onicecandidate = event => {
+                        if (event.candidate) {
+                            socket.emit('signal', { 'ice': event.candidate });
                         }
-                    });
-            } else if (data.ice) {
-                peerConnection.addIceCandidate(new RTCIceCandidate(data.ice));
-            }
-        });
+                    };
+
+                    // Recebe streams remotos
+                    peerConnection.ontrack = event => {
+                        document.getElementById('remoteVideo').srcObject = event.streams[0];
+                    };
+
+                    // Cria a oferta SDP
+                    peerConnection.createOffer()
+                        .then(offer => peerConnection.setLocalDescription(offer))
+                        .then(() => {
+                            socket.emit('signal', { 'sdp': peerConnection.localDescription });
+                        });
+                })
+                .catch(error => {
+                    console.error('Erro ao acessar mídia:', error);
+                });
+
+            // Recebe sinais do servidor de sinalização
+            socket.on('signal', data => {
+                if (data.sdp) {
+                    peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp))
+                        .then(() => {
+                            if (data.sdp.type === 'offer') {
+                                peerConnection.createAnswer()
+                                    .then(answer => peerConnection.setLocalDescription(answer))
+                                    .then(() => {
+                                        socket.emit('signal', { 'sdp': peerConnection.localDescription });
+                                    });
+                            }
+                        });
+                } else if (data.ice) {
+                    peerConnection.addIceCandidate(new RTCIceCandidate(data.ice));
+                }
+            });
+        } else {
+            console.error('getUserMedia não é suportado neste navegador.');
+        }
     </script>
 </body>
 </html>
