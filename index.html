@@ -1,78 +1,146 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-    <title>WebRTC App</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplicação WebRTC com Seleção de Câmera</title>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        video {
+            width: 640px;
+            height: 480px;
+            border: 5px solid #333;
+            border-radius: 10px;
+            background-color: #000;
+            margin-bottom: 20px;
+        }
+        select {
+            margin-bottom: 20px;
+            padding: 10px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Aplicação WebRTC</h1>
+
+    <h1>Selecione uma Câmera</h1>
+    <!-- Dropdown para selecionar a câmera -->
+    <select id="cameraSelect"></select>
+
+    <!-- Vídeos locais e remotos -->
     <video id="localVideo" autoplay playsinline></video>
-    <video id="remoteVideo" autoplay playsinline></video>
-
+    
     <script>
-        // Verifica suporte ao getUserMedia
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            const socket = io.connect(window.location.protocol + '//' + window.location.hostname + ':' + location.port);
+        const videoElement = document.getElementById('localVideo');
+        const cameraSelect = document.getElementById('cameraSelect');
 
-            let localStream;
-            let peerConnection;
-            const config = {
-                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        let localStream;
+        let peerConnection;
+        const config = {
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        };
+
+        const socket = io.connect(window.location.protocol + '//' + window.location.hostname + ':' + location.port);
+
+        // Função para listar todas as câmeras disponíveis
+        async function getCameras() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput'); // Somente câmeras
+
+                videoDevices.forEach((device, index) => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Câmera ${index + 1}`;
+                    cameraSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Erro ao listar as câmeras:', error);
+            }
+        }
+
+        // Função para capturar vídeo da câmera selecionada
+        async function startVideo(deviceId) {
+            const constraints = {
+                video: {
+                    deviceId: deviceId ? { exact: deviceId } : undefined
+                },
+                audio: true
             };
 
-            // Captura da mídia local
-            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-                .then(stream => {
-                    localStream = stream;
-                    document.getElementById('localVideo').srcObject = stream;
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoElement.srcObject = localStream;
 
-                    // Inicializa a PeerConnection
-                    peerConnection = new RTCPeerConnection(config);
-                    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+                // Inicializa a PeerConnection
+                peerConnection = new RTCPeerConnection(config);
+                localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
-                    // Envia candidatos ICE para o servidor de sinalização
-                    peerConnection.onicecandidate = event => {
-                        if (event.candidate) {
-                            socket.emit('signal', { 'ice': event.candidate });
-                        }
-                    };
+                // Envia candidatos ICE para o servidor de sinalização
+                peerConnection.onicecandidate = event => {
+                    if (event.candidate) {
+                        socket.emit('signal', { 'ice': event.candidate });
+                    }
+                };
 
-                    // Recebe streams remotos
-                    peerConnection.ontrack = event => {
-                        document.getElementById('remoteVideo').srcObject = event.streams[0];
-                    };
+                // Recebe streams remotos
+                peerConnection.ontrack = event => {
+                    document.getElementById('remoteVideo').srcObject = event.streams[0];
+                };
 
-                    // Cria a oferta SDP
-                    peerConnection.createOffer()
-                        .then(offer => peerConnection.setLocalDescription(offer))
-                        .then(() => {
-                            socket.emit('signal', { 'sdp': peerConnection.localDescription });
-                        });
-                })
-                .catch(error => {
-                    console.error('Erro ao acessar mídia:', error);
-                });
+                // Cria a oferta SDP
+                peerConnection.createOffer()
+                    .then(offer => peerConnection.setLocalDescription(offer))
+                    .then(() => {
+                        socket.emit('signal', { 'sdp': peerConnection.localDescription });
+                    });
 
-            // Recebe sinais do servidor de sinalização
-            socket.on('signal', data => {
-                if (data.sdp) {
-                    peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp))
-                        .then(() => {
-                            if (data.sdp.type === 'offer') {
-                                peerConnection.createAnswer()
-                                    .then(answer => peerConnection.setLocalDescription(answer))
-                                    .then(() => {
-                                        socket.emit('signal', { 'sdp': peerConnection.localDescription });
-                                    });
-                            }
-                        });
-                } else if (data.ice) {
-                    peerConnection.addIceCandidate(new RTCIceCandidate(data.ice));
-                }
-            });
-        } else {
-            console.error('getUserMedia não é suportado neste navegador.');
+            } catch (error) {
+                console.error('Erro ao acessar a webcam:', error);
+            }
         }
+
+        // Quando uma câmera for selecionada, inicie o vídeo
+        cameraSelect.onchange = () => {
+            const selectedDeviceId = cameraSelect.value;
+            startVideo(selectedDeviceId);
+        };
+
+        // Recebe sinais do servidor de sinalização
+        socket.on('signal', data => {
+            if (data.sdp) {
+                peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp))
+                    .then(() => {
+                        if (data.sdp.type === 'offer') {
+                            peerConnection.createAnswer()
+                                .then(answer => peerConnection.setLocalDescription(answer))
+                                .then(() => {
+                                    socket.emit('signal', { 'sdp': peerConnection.localDescription });
+                                });
+                        }
+                    });
+            } else if (data.ice) {
+                peerConnection.addIceCandidate(new RTCIceCandidate(data.ice));
+            }
+        }); // Corrigido: fechando corretamente o bloco 'socket.on'
+
+        // Listar as câmeras ao carregar a página
+        window.onload = async () => {
+            await getCameras();
+            // Iniciar com a primeira câmera, se disponível
+            if (cameraSelect.options.length > 0) {
+                startVideo(cameraSelect.value);
+            }
+        };
     </script>
 </body>
 </html>
