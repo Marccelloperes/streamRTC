@@ -49,11 +49,18 @@
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
         };
 
-        const socket = io.connect('http://195.35.43.219:8080'); // 
+        const socket = io.connect('http://195.35.43.219:8080'); // Endereço do servidor
 
         // Função para listar todas as câmeras disponíveis
         async function getCameras() {
+            // Verifique se o navegador suporta a API de mídia
+            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+                console.error('API de dispositivos de mídia não suportada neste navegador.');
+                return; // Sai da função se a API não estiver disponível
+            }
+
             try {
+                // Lista todos os dispositivos de mídia disponíveis
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 const videoDevices = devices.filter(device => device.kind === 'videoinput'); // Somente câmeras
 
