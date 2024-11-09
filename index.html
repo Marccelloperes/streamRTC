@@ -31,14 +31,14 @@
     </style>
 </head>
 <body>
-
     <h1>Selecione uma Câmera</h1>
     <!-- Dropdown para selecionar a câmera -->
     <select id="cameraSelect"></select>
 
     <!-- Vídeos locais e remotos -->
     <video id="localVideo" autoplay playsinline></video>
-    
+    <video id="remoteVideo" autoplay playsinline></video>
+
     <script>
         const videoElement = document.getElementById('localVideo');
         const cameraSelect = document.getElementById('cameraSelect');
@@ -68,7 +68,7 @@
             }
         }
 
-        // Função para capturar vídeo da câmera selecionada
+        // Função para capturar vídeo da câmera selecionada e criar a oferta SDP
         async function startVideo(deviceId) {
             const constraints = {
                 video: {
@@ -97,15 +97,13 @@
                     document.getElementById('remoteVideo').srcObject = event.streams[0];
                 };
 
-                // Cria a oferta SDP
-                peerConnection.createOffer()
-                    .then(offer => peerConnection.setLocalDescription(offer))
-                    .then(() => {
-                        socket.emit('signal', { 'sdp': peerConnection.localDescription });
-                    });
+                // Cria e envia a oferta SDP
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                socket.emit('signal', { 'sdp': peerConnection.localDescription });
 
             } catch (error) {
-                console.error('Erro ao acessar a webcam:', error);
+                console.error('Erro ao acessar a webcam ou criar a oferta SDP:', error);
             }
         }
 
