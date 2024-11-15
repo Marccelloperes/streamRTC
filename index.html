@@ -32,38 +32,29 @@
 </head>
 <body>
     <h1>Selecione uma Câmera</h1>
-    <!-- Dropdown para selecionar a câmera -->
     <select id="cameraSelect"></select>
-
-    <!-- Vídeos locais e remotos -->
     <video id="localVideo" autoplay playsinline></video>
     <video id="remoteVideo" autoplay playsinline></video>
 
     <script>
-        const videoElement = document.getElementById('localVideo');
+        const localVideo = document.getElementById('localVideo');
         const cameraSelect = document.getElementById('cameraSelect');
-
-        let localStream;
-        let peerConnection;
+        let localStream, peerConnection;
         const config = {
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
         };
 
         const socket = io.connect('http://195.35.43.219:8080'); // Endereço do servidor
 
-        // Função para listar todas as câmeras disponíveis
+        // Listar câmeras disponíveis
         async function getCameras() {
-            // Verifique se o navegador suporta a API de mídia
             if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
                 console.error('API de dispositivos de mídia não suportada neste navegador.');
-                return; // Sai da função se a API não estiver disponível
+                return;
             }
-
             try {
-                // Lista todos os dispositivos de mídia disponíveis
                 const devices = await navigator.mediaDevices.enumerateDevices();
-                const videoDevices = devices.filter(device => device.kind === 'videoinput'); // Somente câmeras
-
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
                 videoDevices.forEach((device, index) => {
                     const option = document.createElement('option');
                     option.value = device.deviceId;
@@ -75,36 +66,29 @@
             }
         }
 
-        // Função para capturar vídeo da câmera selecionada e criar a oferta SDP
+        // Captura vídeo e configurações do WebRTC
         async function startVideo(deviceId) {
             const constraints = {
-                video: {
-                    deviceId: deviceId ? { exact: deviceId } : undefined
-                },
+                video: { deviceId: deviceId ? { exact: deviceId } : undefined },
                 audio: true
             };
-
             try {
                 localStream = await navigator.mediaDevices.getUserMedia(constraints);
-                videoElement.srcObject = localStream;
+                localVideo.srcObject = localStream;
 
-                // Inicializa a PeerConnection
                 peerConnection = new RTCPeerConnection(config);
                 localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
-                // Envia candidatos ICE para o servidor de sinalização
                 peerConnection.onicecandidate = event => {
                     if (event.candidate) {
                         socket.emit('signal', { 'ice': event.candidate });
                     }
                 };
 
-                // Recebe streams remotos
                 peerConnection.ontrack = event => {
                     document.getElementById('remoteVideo').srcObject = event.streams[0];
                 };
 
-                // Cria e envia a oferta SDP
                 peerConnection.createOffer()
                     .then(offer => peerConnection.setLocalDescription(offer))
                     .then(() => {
@@ -116,13 +100,10 @@
             }
         }
 
-        // Quando uma câmera for selecionada, inicie o vídeo
         cameraSelect.onchange = () => {
-            const selectedDeviceId = cameraSelect.value;
-            startVideo(selectedDeviceId);
+            startVideo(cameraSelect.value);
         };
 
-        // Recebe sinais do servidor de sinalização
         socket.on('signal', data => {
             if (data.sdp) {
                 peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp))
@@ -138,12 +119,10 @@
             } else if (data.ice) {
                 peerConnection.addIceCandidate(new RTCIceCandidate(data.ice));
             }
-        }); // Fechamento correto do bloco 'socket.on'
+        });
 
-        // Listar as câmeras ao carregar a página
         window.onload = async () => {
             await getCameras();
-            // Iniciar com a primeira câmera, se disponível
             if (cameraSelect.options.length > 0) {
                 startVideo(cameraSelect.value);
             }
