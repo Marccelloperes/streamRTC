@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aplicação WebRTC</title>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 </head>
@@ -11,16 +13,84 @@
 
     <script>
         const localVideo = document.getElementById('localVideo');
-        
+        const remoteVideo = document.getElementById('remoteVideo');
+
+        let localStream;
+        let peerConnection;
+
+        // Configuração do servidor STUN/TURN
+        const configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                {
+                    urls: 'turn:195.35.43.219:3478',
+                    username: 'turnUser123',
+                    credential: 'StrongP@ssw0rd!'
+                }
+            ]
+        };
+
+        const socket = io.connect('https://makerlab.uno');
+
         // Captura da mídia local (webcam e microfone)
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
             .then((stream) => {
-                // Defina o stream da webcam no elemento de vídeo
+                localStream = stream;
                 localVideo.srcObject = stream;
+
+                // Envia os fluxos locais para a conexão peer-to-peer
+                stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
             })
             .catch((error) => {
                 console.error('Erro ao acessar a webcam:', error);
             });
+
+        // Inicializa a conexão peer-to-peer
+        function createPeerConnection() {
+            peerConnection = new RTCPeerConnection(configuration);
+
+            peerConnection.onicecandidate = event => {
+                if (event.candidate) {
+                    socket.emit('signal', { type: 'candidate', candidate: event.candidate });
+                }
+            };
+
+            peerConnection.ontrack = event => {
+                remoteVideo.srcObject = event.streams[0];
+            };
+        }
+
+        // Recebe sinais do servidor de sinalização
+        socket.on('signal', async (data) => {
+            if (data.type === 'offer') {
+                createPeerConnection();
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                socket.emit('signal', { type: 'answer', sdp: peerConnection.localDescription });
+            } else if (data.type === 'answer') {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            } else if (data.type === 'candidate') {
+                peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+            }
+        });
+
+        // Envia uma oferta ao servidor de sinalização
+        async function makeOffer() {
+            createPeerConnection();
+
+            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+
+            socket.emit('signal', { type: 'offer', sdp: peerConnection.localDescription });
+        }
+
+        // Chama a função para iniciar a oferta quando a página carregar
+        window.onload = makeOffer;
     </script>
 </body>
 </html>
