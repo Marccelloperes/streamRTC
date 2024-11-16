@@ -2,7 +2,14 @@ let peerConnection;
 
 function createPeerConnection() {
     peerConnection = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            {
+                urls: 'turn:195.35.43.219:3478', // Substitua pelo IP do seu servidor TURN
+                username: 'seu_usuario', // Substitua pelo usuário configurado no TURN
+                credential: 'sua_senha'  // Substitua pela senha configurada no TURN
+            }
+        ]
     });
 
     // Trocar candidatos ICE
