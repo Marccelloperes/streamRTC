@@ -37,9 +37,6 @@
             .then((stream) => {
                 localStream = stream;
                 localVideo.srcObject = stream;
-
-                // Envia os fluxos locais para a conexão peer-to-peer
-                stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
             })
             .catch((error) => {
                 console.error('Erro ao acessar a webcam:', error);
@@ -55,7 +52,7 @@
                 }
             };
 
-            peerConnection.ontrack = event => {
+            peerConnection.ontrack = (event) => {
                 remoteVideo.srcObject = event.streams[0];
             };
         }
