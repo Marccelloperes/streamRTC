@@ -5,80 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aplicação WebRTC</title>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
-    <style>
-        body {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-            font-family: Arial, sans-serif;
-        }
-        video {
-            width: 640px;
-            height: 480px;
-            margin: 10px;
-            border: 2px solid black;
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgb(0,0,0);
-            background-color: rgba(0,0,0,0.4);
-            padding-top: 60px;
-        }
-        .modal-content {
-            background-color: #fefefe;
-            margin: 5% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 80%;
-        }
-        .modal-buttons {
-            display: flex;
-            justify-content: space-around;
-        }
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-    </style>
 </head>
 <body>
     <h1>Aplicação WebRTC</h1>
     <video id="localVideo" autoplay playsinline></video>
     <video id="remoteVideo" autoplay playsinline></video>
 
-    <div id="permissionModal" class="modal">
-        <div class="modal-content">
-            <p>Uma nova conexão foi detectada. Deseja permitir?</p>
-            <div id="connectionInfo"></div>
-            <div class="modal-buttons">
-                <button id="acceptButton">Aceitar</button>
-                <button id="rejectButton">Rejeitar</button>
-            </div>
-        </div>
-    </div>
-
     <script>
         const localVideo = document.getElementById('localVideo');
         const remoteVideo = document.getElementById('remoteVideo');
-        const permissionModal = document.getElementById('permissionModal');
-        const connectionInfo = document.getElementById('connectionInfo');
-        const acceptButton = document.getElementById('acceptButton');
-        const rejectButton = document.getElementById('rejectButton');
 
         let localStream;
         let peerConnection;
 
+        // Configuração do servidor STUN/TURN
         const configuration = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
@@ -92,6 +32,7 @@
 
         const socket = io.connect('https://makerlab.uno');
 
+        // Captura da mídia local (webcam e microfone)
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
             .then((stream) => {
                 localStream = stream;
@@ -101,6 +42,7 @@
                 console.error('Erro ao acessar a webcam:', error);
             });
 
+        // Inicializa a conexão peer-to-peer
         function createPeerConnection() {
             peerConnection = new RTCPeerConnection(configuration);
 
@@ -110,30 +52,21 @@
                 }
             };
 
-            peerConnection.ontrack = event => {
+            peerConnection.ontrack = (event) => {
                 remoteVideo.srcObject = event.streams[0];
             };
         }
 
+        // Recebe sinais do servidor de sinalização
         socket.on('signal', async (data) => {
             if (data.type === 'offer') {
                 createPeerConnection();
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
 
-                connectionInfo.innerHTML = `IP: ${data.ip}<br>Nome: Visitante`;
-                permissionModal.style.display = 'block';
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
 
-                acceptButton.onclick = async () => {
-                    const answer = await peerConnection.createAnswer();
-                    await peerConnection.setLocalDescription(answer);
-                    socket.emit('signal', { type: 'answer', sdp: peerConnection.localDescription });
-                    permissionModal.style.display = 'none';
-                };
-
-                rejectButton.onclick = () => {
-                    peerConnection.close();
-                    permissionModal.style.display = 'none';
-                };
+                socket.emit('signal', { type: 'answer', sdp: peerConnection.localDescription });
             } else if (data.type === 'answer') {
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
             } else if (data.type === 'candidate') {
@@ -141,6 +74,7 @@
             }
         });
 
+        // Envia uma oferta ao servidor de sinalização
         async function makeOffer() {
             createPeerConnection();
 
@@ -152,6 +86,7 @@
             socket.emit('signal', { type: 'offer', sdp: peerConnection.localDescription });
         }
 
+        // Chama a função para iniciar a oferta quando a página carregar
         window.onload = makeOffer;
     </script>
 </body>

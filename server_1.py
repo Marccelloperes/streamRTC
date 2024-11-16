@@ -5,6 +5,8 @@ from aiortc import RTCPeerConnection, RTCSessionDescription, MediaStreamTrack
 from aiortc.contrib.media import MediaPlayer, MediaRecorder
 import asyncio
 
+
+
 pcs = set()
 
 async def index(request):
@@ -37,10 +39,6 @@ async def offer(request):
         async def on_ended():
             print(f"Track {track.kind} ended")
 
-    # Adicionar o endereço IP do solicitante
-    requester_ip = request.remote
-    print(f"Solicitação de conexão recebida de IP: {requester_ip}")
-
     # Configurar a descrição local (local SDP)
     await pc.setRemoteDescription(offer)
     answer = await pc.createAnswer()
@@ -48,8 +46,7 @@ async def offer(request):
 
     return web.json_response({
         'sdp': pc.localDescription.sdp,
-        'type': pc.localDescription.type,
-        'ip': requester_ip
+        'type': pc.localDescription.type
     })
 
 async def on_shutdown(app):
@@ -65,3 +62,4 @@ app.add_routes([web.get('/', index),
 
 if __name__ == '__main__':
     web.run_app(app, host='0.0.0.0', port=8080)  # Escutar em todas as interfaces de rede
+
