@@ -2,15 +2,18 @@ import os
 import json
 from aiohttp import web
 from aiortc import RTCPeerConnection, RTCSessionDescription, MediaStreamTrack
-from aiortc.contrib.media import MediaPlayer, MediaRecorder
+from aiortc.contrib.media import MediaPlayer
+import ssl
 import asyncio
 
 pcs = set()
 
+# Rota principal para o index.html
 async def index(request):
     content = open(os.path.join(os.path.dirname(__file__), 'index.html'), 'r').read()
     return web.Response(content_type='text/html', text=content)
 
+# Rota para lidar com ofertas WebRTC
 async def offer(request):
     params = await request.json()
     offer = RTCSessionDescription(sdp=params['sdp'], type=params['type'])
@@ -37,11 +40,11 @@ async def offer(request):
         async def on_ended():
             print(f"Track {track.kind} ended")
 
-    # Adicionar o endereço IP do solicitante
+    # Captura o IP do solicitante
     requester_ip = request.remote
     print(f"Solicitação de conexão recebida de IP: {requester_ip}")
 
-    # Configurar a descrição local (local SDP)
+    # Configura a descrição local
     await pc.setRemoteDescription(offer)
     answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
@@ -49,19 +52,26 @@ async def offer(request):
     return web.json_response({
         'sdp': pc.localDescription.sdp,
         'type': pc.localDescription.type,
-        'ip': requester_ip
+        'ip': requester_ip,
+        'message': "Você está conectado ao servidor MakerLab!"
     })
 
+# Encerrar todas as conexões ao desligar o servidor
 async def on_shutdown(app):
-    # Fechar todas as conexões peer
     coros = [pc.close() for pc in pcs]
     await asyncio.gather(*coros)
     pcs.clear()
 
+# Configuração do servidor
 app = web.Application()
 app.on_shutdown.append(on_shutdown)
-app.add_routes([web.get('/', index),
-                web.post('/offer', offer)])
+app.add_routes([web.get('/', index), web.post('/offer', offer)])
 
 if __name__ == '__main__':
-    web.run_app(app, host='0.0.0.0', port=8080)  # Escutar em todas as interfaces de rede
+    # Configuração SSL para HTTPS
+    ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    ssl_context.load_cert_chain(certfile='/etc/letsencrypt/live/makerlab.uno/fullchain.pem',
+                                keyfile='/etc/letsencrypt/live/makerlab.uno/privkey.pem')
+
+    # Inicializa o servidor com HTTPS
+    web.run_app(app, host='0.0.0.0', port=8080, ssl_context=ssl_context)
