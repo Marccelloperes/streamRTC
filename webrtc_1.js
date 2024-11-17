@@ -5,7 +5,7 @@ function createPeerConnection() {
         iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
             {
-                urls: 'turns:195.35.43.219:3478', // Utilize HTTPS com TURN para segurança
+                urls: 'turn:195.35.43.219:3478', // Substitua pelo IP do seu servidor TURN
                 username: 'turnUser123', // Substitua pelo usuário configurado no TURN
                 credential: 'StrongP@ssw0rd!'  // Substitua pela senha configurada no TURN
             }
@@ -24,8 +24,7 @@ function createPeerConnection() {
 
     // Receber o vídeo remoto
     peerConnection.ontrack = event => {
-        const remoteVideo = document.getElementById('remoteVideo');
-        remoteVideo.srcObject = event.streams[0];
+        document.getElementById('remoteVideo').srcObject = event.streams[0];
     };
 }
 
@@ -63,10 +62,4 @@ async function handleAnswer(sdp) {
 
 function addIceCandidate(candidate) {
     peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-}
-
-// Função para enviar sinalização via WebSocket (exemplo genérico)
-function sendSignal(data) {
-    const socket = io.connect('wss://makerlab.uno'); // Certifique-se de usar WebSocket seguro
-    socket.emit('signal', data);
 }
